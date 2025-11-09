@@ -57,7 +57,7 @@ it ends with:
 ninja: build stopped: subcommand failed.
 ```
 
-One can fix it by changing _Settings_ (Ctrl-Alt-S), _Build, Execution, Deployment_ > _CMake_ and adding in text box titled _CMake options:_ the following incantation:
+One can fix it by changing _Settings_ (Ctrl-Alt-S), _Build, Execution, Deployment_ > _CMake_ and adding in the text box titled _CMake options:_ the following incantation:
 
 ```
 --toolchain $CMakeProjectDir$/cmake/gcc-arm-none-eabi.cmake
@@ -135,7 +135,7 @@ Error in initializing ST-LINK device.
 Reason: ST-LINK firmware upgrade required. Please upgrade the ST-LINK firmware using the upgrade tool.
 ```
 
-It turns out, that ST-LINK firmware on by devboard is too old, and needs to be upgraded:
+It turns out, that ST-LINK firmware on my devboard is too old, and needs to be upgraded:
 
 ```
 cd /opt/st/stm32cubectl_1.19.0

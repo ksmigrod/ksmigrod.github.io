@@ -1,0 +1,361 @@
+---
+title: STM32, GPIO output and the use of state machine
+date: 2025-11-10 06:44:25
+tags:
+---
+## Early chapters of the course
+
+As a mentioned in the initial post I take the course of STM32 HAL programming by Mateusz Salamon.
+The course in my native Polish, but this notes will be English, to motivate me to practice writing in English.
+
+The first module of the course consists of some remarks about the structure of the course itself, instructions on how to study, and high level information about STM32 ecosystem, and its devboards, both Nucleo and Discovery. 
+The course is sold as access to its videos stored on Vimeo, with set of electronics components required do the workshop part, therefore early lessons are theory heavy, as students were expected to ingest them before the package was delivered.
+
+The second module starts with a series of lessons delving deeper into software tools provided by STM.
+It describes tools like:
+
+* STM32CubeProgrammer
+* STM32CubeMX
+* STM32CubeIDE
+
+and gives some general information about HAL and LL libraries, differences between them, and how to find the documentation.
+
+Throughout the course there is a lot of focus on understanding protocols for communication, and finding required information in documentation of both STM32 microcontrollers and chips it interfaces with.  
+
+## GPIO Output
+
+Lesson 20 of Module 2 [M2L20] explains GPIO.
+
+### Ports and Pins
+
+In STM32 most pins can be configured as GPIO.
+Internally pins are grouped into ports (named as capital letters, from A forward).
+Each port can have up to 16 pins, numbered from 0 to 15.
+The name PC13 refers to pin 13 on port C.
+Unlike Arduino, consecutive pins of the same port might be located on seemingly a random pins of physical chip.
+
+### Output Mode
+
+Each pin configured as output, can be set up as either Push-Pull or Open Drain.
+
+#### Push Pull
+
+Output pin is can be driven to alternatively VDD and GND.
+
+#### Open Drain
+
+Output pin can only be preconfigured to drive to VDD and rely on pull-down resistor to achieve low-state, or to drive to GND and rely on pull-up resistor to achieve high-state.
+This setup is used for communication busses like I2C.
+
+STM32 has pull-up and pull-down resistors.
+
+### Output speed
+
+The speed of rising/falling edge of signal.
+Higher might be required for high speed busses, but higher the speed, the more electronic noise is generated.
+
+## Documentation
+
+Current documentation can be found through STM32CubeMX
+
+![img.png](STM32CubeMX-click-on-board.png)
+![img.png](STM32CubeMX-board-selector.png)
+![img.png](STM32CubeMX-mcu-selector.png)
+
+### Reference manual
+
+For STM32F411 this document is titled RM0383 Reference manual.
+This document contains description of peripherals and registers of each peripherial, from programming perspective.
+It describes whole range of STM32F411 chips, from 48 pin CE, through 64 pin RE, up to 100 pin VE chips, so it can describe pripherials that are not available in smaller chips.
+
+### Datasheet
+
+This document is available through STM32CubeMX in _Product Specification_ section of documentation.
+It contains mapping between physical pins on MCUs and logical pin names used in reference manual, electrical specifications of MCU and individual pins can also be found in this document.
+
+### HAL Reference
+
+Description of HAL libraries is nowhere to be found through STM32CubeMX. You either know document number, and ask google to find it for you, or go through:
+
+* www.st.com
+* Tools & Software
+* Embedded Software
+* MCU and MPU embedded software>STM32 embedded software
+* MCU and MPU embedded software>STM32 embedded software>STM32 Cube MCU & MPU Packages
+* Documentation
+* User Manual (5 of 96)>View All
+* [Ctrl-F] STM32F4 (or other family name) -> UM1725 Description of STM32F4 HALL and low-layer drivers
+
+HAL Reference is common for the whole family of STM32 chips (i.e. one reference for F4 family, another for G4 family etc.).
+Documentation is intimidating, as it contain descriptions of functions to access peripherals available in each and every chip in a family, and a lot of those peripherals are not available in STM32F411.
+It contains descriptions of each individual function HAL in library, but it does not explain how to use this functions in a program.
+
+## GPIO Output functions
+
+Naming convention: HAL functions for GPIO peripheral have names starting with `HAL_GPIO_`
+
+### Pin user label
+
+In GUI one can set up _User Label_ for pin. It ought to consist of two sections:
+
+* Short, all upper-case tag, to be used in code.
+* User readable comment, surrounded with brackets.
+
+Ie. `LD2 [Green Led]`, this label will become base of two defines in `Core/Inc/main.h`:
+
+```c
+#define LD2_Pin GPIO_PIN_5
+#define LD2_GPIO_Port GPIOA
+```
+
+Use this defines instead of pointer to port and pin.
+This way, if you decide to use different leg of your chip, you can easily re-label it and avoid any changes in code.
+
+
+### HAL_GPIO_Init
+
+A call to this function is generated by CubeMX, it initializes GPIO pin, CubeMX prefills relevant data structures according to configuration made in GUI.
+Look for `MX_GPIO_Init` function in `Core/Src/gpio.c` file.
+
+### HAL_GPIO_WritePin
+
+Defined as
+```c
+void HAL_GPIO_WritePin (GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin, GPIO_PinState PinState);
+```
+
+Used to set state on a pin.
+
+```c
+HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_Reset); // set low on pin
+HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_Set); // set high on pin
+```
+
+### HAL_GPIO_TooglePin
+
+Defined as
+```c
+void HAL_GPIO_TogglePin (GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin);
+```
+
+Used to toggle state of a pin.
+```c
+HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+```
+
+### Other functions
+
+There are also `void HAL_GPIO_Deinit(GPIO_TypeDef * GPIOx, uint32_t GPIO_Pin)` and `HAL_StatusTypeDef HAL_GPIO_LockPin (GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin)`, but why?
+
+## State machine
+
+### HAL_Delay
+
+Defined as:
+
+```c
+void HAL_Delay (uint32_t Delay); // wait at least specified number of miliseconds
+```
+
+This function is used to introduce a delay.
+It might be considered for simple blink a LED program, but otherwise should be used in initialization code only, never in main loop or interrupt service routines.
+
+### HAL_GetTick
+
+Defined as:
+```c
+uint32_t HAL_GetTick(void); // provides a tick value in millisecond.
+```
+
+### Doing multiple things at the time
+
+Blinking one LED is easy with HAL_Delay: Set pin to High, delay, Set pin to Low, delay, rinse and repeat.
+Blinking two LEDs at different speed becomes harder.
+Blinking multiple LEDs at different speeds with different light to dark rates becomes a nightmare.
+
+One of solutions is to use a state machine.
+
+Example code:
+
+Include file:
+```c
+#include "stm32f4xx_hal_def.h"
+
+typedef enum {
+    LED_IDLE = 0,
+    LED_SINGLE_FLASH,
+    LED_FLASHING_ON,
+    LED_FLASHING_OFF
+} LED_STATE;
+
+typedef struct {
+    LED_STATE state;    // Current state of the LED
+    GPIO_TypeDef *port; // Port where led is connected
+    uint16_t pin;       // Pin in that port
+    const GPIO_PinState on; // PinState to turn LED on
+    const GPIO_PinState off; // PinState to turn LED off
+
+    uint32_t last_tick; // Tick of the last state change
+    uint32_t interval;  // Flash length/Flash interval.
+} TLed;
+
+/**
+ * Initialize state machine.
+ *
+ * @param led Preallocated struct describing led configuration.
+ */
+void Led_Init(TLed *led);
+
+/**
+ * Turn led on.
+ *
+ * @param led led configuration
+ */
+void Led_On(TLed *led);
+
+/**
+ * Turn led off.
+ *
+ * @param led led configuration
+ */
+void Led_Off(TLed *led);
+
+/**
+ * Turn led on, for time_ms duration and turn it of.
+ *
+ * @param led led configuration
+ * @param time_ms flash duration, in miliseconds
+ */
+void Led_SingleFlash(TLed *led, uint32_t time_ms);
+
+/**
+ * Blink led continuosly, every interval_ms miliseconds.
+ *
+ * @param led led configuration
+ * @param interval_ms flash duration
+ */
+void Led_ContinuousFlashing(TLed *led, uint32_t interval_ms);
+
+/**
+ * Routine to be placed in the main loop.
+ *
+ * @param led led configuration
+ */
+void Led_Task(TLed *led);
+```
+
+```c
+#include <stdbool.h>
+#include "stm32f4xx_hal.h"
+#include "led.h"
+
+//<editor-fold desc="utility functions">
+static inline void led_on(TLed *led) {
+    HAL_GPIO_WritePin(led->port, led->pin, led->on);
+}
+
+static inline void led_off(TLed *led) {
+    HAL_GPIO_WritePin(led->port, led->pin, led->off);
+}
+
+static inline bool delay_done(TLed *led) {
+    return HAL_GetTick() > led->last_tick + led->interval;
+}
+//</editor-fold>
+
+//<editor-fold desc="external interaction routines">
+void Led_Init(TLed *led) {
+    led_off(led);
+}
+
+void Led_On(TLed *led) {
+    led_on(led);
+    led->state = LED_IDLE;
+}
+
+void Led_Off(TLed *led) {
+    led_off(led);
+    led->state = LED_IDLE;
+}
+
+void Led_SingleFlash(TLed *led, uint32_t time_ms) {
+    led_on(led);
+    led->state = LED_SINGLE_FLASH;
+    led->last_tick = HAL_GetTick();
+    led->interval = time_ms;
+}
+
+void Led_ContinuousFlashing(TLed *led, uint32_t interval_ms) {
+    led_on(led);
+    led->state = LED_FLASHING_ON;
+    led->last_tick = HAL_GetTick();
+    led->interval = interval_ms;
+}
+//</editor-fold>
+
+//<editor-fold desc="state routines">
+static void Led_do_SINGLE_FLASH(TLed *led) {
+    if (delay_done(led)) {
+        led_off(led);
+        led->state = LED_IDLE;
+    }
+}
+
+static void Led_do_FLASHING_ON(TLed *led) {
+    if (delay_done(led)) {
+        led_off(led);
+        led->last_tick = HAL_GetTick();
+        led->state = LED_FLASHING_OFF;
+    }
+}
+
+static void Led_do_FLASHING_OFF(TLed *led) {
+    if (delay_done(led)) {
+        led_on(led);
+        led->last_tick = HAL_GetTick();
+        led->state = LED_FLASHING_ON;
+    }
+}
+//</editor-fold>
+
+void Led_Task(TLed *led) {
+    switch (led->state) {
+        case LED_IDLE:
+            break;
+        case LED_SINGLE_FLASH:
+            Led_do_SINGLE_FLASH(led);
+            break;
+        case LED_FLASHING_ON:
+            Led_do_FLASHING_ON(led);
+            break;
+        case LED_FLASHING_OFF:
+            Led_do_FLASHING_OFF(led);
+            break;
+    }
+}
+```
+
+Usage in code:
+
+```c
+/* USER CODE BEGIN PV */
+TLed green_led = {
+        .state = LED_IDLE,
+        .port = LD2_GPIO_Port,
+        .pin = LD2_Pin,
+        .on = GPIO_PIN_SET,
+        .off = GPIO_PIN_RESET,
+};
+/* USER CODE END PV */
+
+/* USER CODE BEGIN 2 */
+Led_Init(&green_led);
+Led_ContinuousFlashing(&green_led, 250);
+/* USER CODE END 2 */
+
+/* USER CODE BEGIN WHILE */
+while (1)
+{
+  Led_Task(&green_led);
+  /* USER CODE END WHILE */
+```
